@@ -432,18 +432,6 @@ Never paste content when ABORT is non-nil."
       (emacs-everywhere-mode -1)
       (server-buffer-done (current-buffer)))))
 
-(defun emacs-everywhere--cleanup-buffer ()
-  "Clean up the current buffer before finishing."
-  (let ((inhibit-message t)
-        (require-final-newline nil)
-        write-file-functions)
-    (when (buffer-file-name)
-      (with-file-modes #o600
-        (write-file (buffer-file-name)))
-      (set-visited-file-modtime)
-      (clear-visited-file-modtime)
-      (set-buffer-modified-p nil))))
-
 (defun emacs-everywhere-abort ()
   "Abort current emacs-everywhere session."
   (interactive)
