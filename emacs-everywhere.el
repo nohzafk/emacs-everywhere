@@ -208,7 +208,7 @@ Set to nil to disable."
   :type '(repeat string)
   :group 'emacs-everywhere)
 
-(defcustom emacs-everywhere-clipboard-sleep-delay 0.01
+(defcustom emacs-everywhere-clipboard-sleep-delay 0.1
   "Waiting period to wait to propagate clipboard actions."
   :type 'number
   :group 'emacs-everywhere)
@@ -676,35 +676,61 @@ return windowTitle"))
                    (cdr emacs-everywhere-window-focus-command))))
   (yank))
 
-(defun emacs-everywhere-insert-selection ()
-  "Insert the last text selection into the buffer."
-  (pcase system-type
-    ('darwin (progn
-               ;; Try to get selected text directly via AppleScript
-               (let ((selection
-                      (with-temp-buffer
-                        (call-process "osascript" nil t nil
-                                    "-e" "tell application \"System Events\"
+(defun emacs-everywhere-insert-selection--darwin ()
+  "Insert selection on darwin, try to get selected text directly via AppleScript."
+  (let ((selection
+         (with-temp-buffer
+           (call-process "osascript" nil t nil
+                         "-e" "tell application \"System Events\"
                                            set frontAppName to name of first application process whose frontmost is true
                                          end tell
                                          set theSelection to \"\"
-                                         tell application frontAppName
-                                           try
-                                             set theSelection to selection
-                                             if theSelection is not \"\" then
-                                               return theSelection
-                                             end if
-                                           end try
-                                         end tell")
-                        (buffer-string))))
-                 ;; If direct selection fails, fall back to clipboard
-                 (if (and selection (not (string-empty-p selection)))
-                     (insert selection)
-                   (progn
-                     (call-process "osascript" nil nil nil
-                                  "-e" "tell application \"System Events\" to keystroke \"c\" using command down")
-                     (sleep-for emacs-everywhere-clipboard-sleep-delay)
-                     (yank))))))
+                                         if frontAppName is \"Google Chrome\" then
+                                           tell application \"Google Chrome\"
+                                             try
+                                               set theTab to active tab of first window
+                                               set theSelection to execute theTab javascript \"window.getSelection().toString()\"
+                                               if theSelection is not \"\" then
+                                                 display notification theSelection with title \"Selection from Chrome\"
+                                                 return theSelection
+                                               end if
+                                             on error errMsg
+                                               display notification \"No direct selection, using clipboard\" with title \"EmacsEverywhere from Chrome\"
+                                             end try
+                                           end tell
+                                         else
+                                           tell application frontAppName
+                                             try
+                                               set theSelection to selection
+                                               if theSelection is not \"\" then
+                                                 display notification theSelection with title (\"Selection from \" & frontAppName)
+                                                 return theSelection
+                                               end if
+                                             on error errMsg
+                                               display notification \"No direct selection, using clipboard\" with title (\"EmacsEverywhere from \" & frontAppName)
+                                             end try
+                                           end tell
+                                         end if
+                                         -- Fallback to clipboard if we got here
+                                         tell application \"System Events\" to keystroke \"c\" using command down
+                                         delay 0.1
+                                         set theSelection to (the clipboard as text)
+                                         display notification theSelection with title \"Selection from clipboard\"
+                                         return theSelection")
+           (buffer-string))))
+    ;; If direct selection fails, fall back to clipboard
+    (if (and selection (not (string-empty-p selection)))
+        (insert selection)
+      (progn
+        (call-process "osascript" nil nil nil
+                      "-e" "tell application \"System Events\" to keystroke \"c\" using command down")
+        (sleep-for emacs-everywhere-clipboard-sleep-delay)
+        (yank)))))
+
+(defun emacs-everywhere-insert-selection ()
+  "Insert the last text selection into the buffer."
+  (pcase system-type
+    ('darwin (emacs-everywhere-insert-selection--darwin))
     ((or 'ms-dos 'windows-nt 'cygwin)
      (emacs-everywhere-insert-selection--windows))
     (_ (when-let ((selection (gui-get-selection 'PRIMARY 'UTF8_STRING)))
