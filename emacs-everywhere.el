@@ -403,6 +403,10 @@ Never paste content when ABORT is non-nil."
         (let ((inhibit-message t)
               (require-final-newline nil)
               write-file-functions)
+          ;; Add this to your config to exclude tempf file from recent files
+          ;; (with-eval-after-load 'recentf
+          ;;   (dolist (pattern emacs-everywhere-file-patterns)
+          ;;     (add-to-list 'recentf-exclude pattern)))
           (with-file-modes #o600
             (write-file buffer-file-name))
           (apply #'call-process (car emacs-everywhere-copy-command)
