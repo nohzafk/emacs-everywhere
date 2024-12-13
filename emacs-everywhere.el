@@ -397,8 +397,17 @@ Never paste content when ABORT is non-nil."
       (setq abort t))
     (unless abort
       (run-hooks 'emacs-everywhere-final-hooks)
-      (gui-select-text (buffer-string))
-      (gui-backend-set-selection 'PRIMARY (buffer-string))
+      ;; First ensure text is in kill-ring and system clipboard
+      (let ((text (buffer-string)))
+        (kill-new text)
+        ;; Use macOS specific clipboard command
+        (when (eq system-type 'darwin)
+          (call-process "osascript" nil nil nil
+                       "-e" (format "set the clipboard to %S" text)))
+        ;; Also try GUI selection methods
+        (gui-select-text text)
+        (gui-backend-set-selection 'PRIMARY text))
+      ;; Extra clipboard handling if needed
       (when emacs-everywhere-copy-command ; handle clipboard finicklyness
         (let ((inhibit-message t)
               (require-final-newline nil)
@@ -428,6 +437,8 @@ Never paste content when ABORT is non-nil."
         (when (and (frame-parameter nil 'emacs-everywhere-app)
                    emacs-everywhere-paste-command
                    (not abort))
+          ;; Add small delay before paste
+          (sleep-for emacs-everywhere-clipboard-sleep-delay)
           (apply #'call-process (car emacs-everywhere-paste-command)
                  nil nil nil (cdr emacs-everywhere-paste-command)))))
     ;; Clean up after ourselves in case the buffer survives `server-buffer-done'
